@@ -1,11 +1,14 @@
 from Data import Data
 import numpy as np
-from pgmpy.models import BayesianNetwork
+import pgmpy.models
+import BayesianNetwork
 from pgmpy.inference import VariableElimination
 from pgmpy.factors.discrete import TabularCPD
 import scipy.stats
 from pgmpy.factors.continuous import LinearGaussianCPD
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.linear_model import LogisticRegression
 
 
@@ -152,7 +155,22 @@ class CauseEffectBiasGenerator:
 
 
 def sample_model():
-    model = BayesianNetwork([('sex', 'income'), ('age', 'income')])
+    bn = BayesianNetwork.BayesianNetwork()
+    bn.addEdge("sex", "income")
+    bn.addEdge("age", "income")
+    bn.addEdge("hard-working", "income")
+    bn.addProbability("sex", [0.5, 0.5], 2)
+    bn.addProbability("age", scipy.stats.randint(0, 5), 5)
+    bn.addProbability("hard-working", [0.8, 0.2], 2)
+    bn.addProbability("income", {"sex": scipy.stats.uniform(),
+                                 "age": scipy.stats.genhalflogistic(0.773),
+                                 "hard-working": scipy.stats.genhalflogistic(0.773),
+                                 "income": [0.6, 0.4]}, 2)
+    bn._network.check_model()
+    return bn
+
+def old_sample_model():
+    model = pgmpy.models.BayesianNetwork([('sex', 'income'), ('age', 'income')])
 
     cpd_sex = TabularCPD('sex', 2, [[0.5], [0.5]])
     cpd_age = TabularCPD('age', 5, [[0.2], [0.2], [0.2], [0.2], [0.2]])
@@ -166,32 +184,16 @@ def sample_model():
     model.add_cpds(cpd_sex, cpd_age, cpd_income)
     return model
 
-
-def test_model(model):
-    data = model.simulate(1_000_000)
-    if "rich" in data:
-        df2 = data.groupby(['sex', 'age'], as_index=False)['income', "rich"].agg(
-            {"income": ["mean", "count"], "rich": ["mean"]})
-    elif "age" not in data:
-        df2 = data.groupby(['sex'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
-    else:
-        df2 = data.groupby(['sex', 'age'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
-
-    # clf = LogisticRegression().fit(data.drop("income", axis=1), data["income"])
-    # test_df = model.generator.simulate(50_000)
-    # score = clf.score(test_df.drop("income", axis=1), test_df["income"])
-
-    # print(f"Accuracy: {score}")
-    print(f"Distribution: \n{df2}")
-
-
 def test_data(data):
     if "age" not in data.df():
         df2 = data.df().groupby(['sex'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
-    else:
+    elif "hard-working" not in data.df():
         df2 = data.df().groupby(['sex', 'age'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
-
-    print(f"Distribution: \n{df2}")
+        sns.barplot(x="age", hue="sex", y="mean", data=df2)
+    else:
+        df2 = data.df().groupby(['sex', 'age', "hard-working"], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
+        sns.catplot(x="age", y="mean", hue="sex", col="hard-working", data=df2, kind="bar")
+    plt.show()
 
 
 if __name__ == "__main__":

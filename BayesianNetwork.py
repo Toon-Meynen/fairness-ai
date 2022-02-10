@@ -3,12 +3,15 @@ import scipy.stats
 import pgmpy.factors.discrete
 import numpy as np
 import scipy.special
-import pgmpy_test
+import DataGenerator
 
 
 class BayesianNetwork:
     def __init__(self):
         self._network = pgmpy.models.BayesianNetwork()
+
+    def simulate(self, n=10_000):
+        return self._network.simulate(n)
 
     def addEdge(self, a, b):
         self._network.add_edge(a, b)
@@ -36,7 +39,8 @@ class BayesianNetwork:
                     raise KeyError(f"no statistical function provided for parent: {i}")
 
             cpd_matrix = []
-            for value in range(size):
+            for value in range(size-1):
+                print(value)
                 # calculate probabilities for each value of outcome
                 matrices = []
                 for parent in parents:
@@ -59,12 +63,17 @@ class BayesianNetwork:
 
                 cpd_matrix.extend(matrix.T)
 
+            # use previously calculated matrix as val=1, and cols sum to 1
+            tmp = np.asarray(cpd_matrix)
+            cpd_matrix = list(1 - tmp)
+            cpd_matrix.extend(tmp)
             cpd_matrix = np.asarray(cpd_matrix)
             print(cpd_matrix)
             print()
+
             # ensure each column sums to 1
             # using softmax
-            cpd_matrix = scipy.special.softmax(cpd_matrix, axis=0)
+            #cpd_matrix = scipy.special.softmax(cpd_matrix, axis=0)
             # using normalization
             #cpd_matrix /= np.asarray([cpd_matrix.T[i].sum() for i in range(len(cpd_matrix.T))])
             print(cpd_matrix)
@@ -76,21 +85,11 @@ class BayesianNetwork:
 
 
 if __name__ == "__main__":
-    bn = BayesianNetwork()
-    bn.addEdge("sex", "income")
-    bn.addEdge("age", "income")
-    bn.addProbability("sex", [0.5, 0.5], 2)
-    bn.addProbability("age", scipy.stats.randint(0, 5), 5)
-    bn.addProbability("income", {"sex": scipy.stats.uniform(),
-                                 "age": scipy.stats.genhalflogistic(0.773),
-                                 "income": [0.6, 0.4]}, 2)
-    #print(bn._network.get_cpds("sex"))
-    #print(bn._network.get_cpds("age"))
-    tmp = bn._network.get_cpds("income")
-    model = pgmpy_test.sample_model()
-    #print(tmp)
-    print()
-    bn._network.check_model()
+    bn = DataGenerator.sample_model()
+    dg = DataGenerator.DataGenerator(data_generator=bn, protected_attributes=["sex"], labels=["income"])
+    data = dg.simulate(1_000_000)
+    print(data.metrics().disparate_impact())
+    DataGenerator.test_data(data)
 
 """
     def sample_model():
