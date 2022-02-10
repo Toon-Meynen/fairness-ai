@@ -16,6 +16,9 @@ class BayesianNetwork:
     def addEdge(self, a, b):
         self._network.add_edge(a, b)
 
+    def addNode(self, a):
+        self._network.add_node(a)
+
     def addProbability(self, a, p, size):
         if a in self._network.get_roots():
             try:
@@ -27,10 +30,8 @@ class BayesianNetwork:
             #TODO: add block for continuous probability type
             self._network.add_cpds(cpd)
         else:
-            parents = self._network.get_parents("income")
+            parents = self._network.get_parents(a)
             # ensure probability dictionary is complete
-            if a not in p:
-                raise KeyError(f"{a} does not have a probability distribution")
             for i in p:
                 if i not in parents and i is not a:
                     raise KeyError(f"{i} is not a parent of {a}")
@@ -45,8 +46,13 @@ class BayesianNetwork:
                 matrices = []
                 for parent in parents:
                     # divide by length to ensure i is within [0, 1]
-                    tmp = np.asarray([[p[parent].pdf(i / len(self._network.get_cpds(parent).values))]
-                                      for i in range(len(self._network.get_cpds(parent).values))])
+                    try:
+                        tmp = np.asarray([[p[parent].pdf(i / len(self._network.get_cpds(parent).values))]
+                                          for i in range(len(self._network.get_cpds(parent).values))])
+                    except AttributeError:
+                        tmp = np.asarray([[p[parent][i]]
+                                          for i in range(len(self._network.get_cpds(parent).values))])
+
                     matrices.append(tmp)
 
                 matrix = None
@@ -59,7 +65,8 @@ class BayesianNetwork:
                         matrix = matrix.reshape((len(matrix), 1))
 
                 # add weight of the specific outcome value
-                matrix = matrix * p[a][value]
+                if a in p:
+                    matrix = matrix * p[a][(value+1*-1)]  # !! invert value
 
                 cpd_matrix.extend(matrix.T)
 
@@ -85,9 +92,14 @@ class BayesianNetwork:
 
 
 if __name__ == "__main__":
-    bn = DataGenerator.sample_model()
+    bn = BayesianNetwork()
+    bn.addNode("sex")
+    bn.addProbability("sex", [0.5, 0.5], 2)
+    bn._network.check_model()
+
     dg = DataGenerator.DataGenerator(data_generator=bn, protected_attributes=["sex"], labels=["income"])
-    data = dg.simulate(1_000_000)
+    data = dg.simulate(100_000)
+    print(data)
     print(data.metrics().disparate_impact())
     DataGenerator.test_data(data)
 
