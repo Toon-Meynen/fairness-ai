@@ -73,6 +73,7 @@ class SamplingBiasGenerator(BiasGenerator):
                     data.df().loc[(data.df()[self.parameter] == self.pvalue) & (data.df()[key] == value)].sample(
                         frac=self.bias_strength * fraction).index, inplace=True)
         return data
+SelectionBiasGenerator = SamplingBiasGenerator
 
 
 class MeasurementBiasGenerator:
@@ -88,12 +89,6 @@ class MeasurementBiasGenerator:
         if weight is None:
             weight = dict()
         self.weight = weight
-
-        # can be:
-        # Higher --> too high measurements
-        # Lower --> too low measurements
-        # Wider --> Both Lower and Higher
-        # Random --> Completely incorrect measurements
 
     def apply(self, data):
         # ensure weight dict is complete, fill with default values where empty
@@ -184,6 +179,30 @@ def old_sample_model():
     model.add_cpds(cpd_sex, cpd_age, cpd_income)
     return model
 
+def police_model():
+    model = BayesianNetwork.BayesianNetwork()
+
+    model.addNode("race")
+    model.addNode("gender")
+    model.addNode("drugs")
+    model.addNode("searched")
+    model.addNode("drugs-detected")
+
+    model.addEdge("drugs", "drugs-detected")
+    model.addEdge("searched", "drugs-detected")
+
+    model.addProbability("race", scipy.stats.randint(0, 2), 2)
+    model.addProbability("gender", scipy.stats.randint(0, 2), 2)
+    model.addProbability("drugs", [0.9, 0.1], 2)
+    model.addProbability("searched", [0.9, 0.1], 2)
+    model.addProbability("drugs-detected", {"drugs": [0.1, 0.9],
+                                            "searched": [0.3, 0.7 ]} , 2)
+
+    return model
+
+
+
+
 def test_data(data):
     if "age" not in data.df():
         df2 = data.df().groupby(['sex'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
@@ -195,26 +214,28 @@ def test_data(data):
         sns.catplot(x="age", y="mean", hue="sex", col="hard-working", data=df2, kind="bar")
     plt.show()
 
+def test_police_data(data):
+    df2 = data.df().groupby(['gender', 'race', "searched", "drugs"], as_index=False)['drugs-detected'].agg({"mean": "mean", "count": "count"})
+    sns.catplot(x="drugs", y="count", hue="race", col="searched", data=df2, kind="bar")
+    sns.catplot(x="drugs", y="mean", hue="race", col="searched", data=df2, kind="bar")
+    plt.show()
+
 
 if __name__ == "__main__":
-    model = sample_model()
-    # test_model(model)
+    model = police_model()
+    generator = DataGenerator(model, ["gender", "race"], ["drugs-detected"])
+    data = generator.simulate(n=100_000)
+    test_police_data(data)
+    bias = SelectionBiasGenerator("race", 0, {"drugs-detected": {0: 0.2, 1: 1}}, bias_strength=0.4)
+    data = bias.apply(data)
+    test_police_data(data)
 
-    samplebias = SamplingBiasGenerator(model, ["sex"], ["income"], "sex", 0, 0.7)
-    test_model(samplebias)
+    #model = sample_model()
 
-    measurementbias = MeasurementBiasGenerator(biased_parameter="sex", bp_value=0, parameter_to_adapt="age",
-                                               bias_strength=0.3, data_generator=model, bias_type="higher")
-    test_model(measurementbias)
-
-    omittedvariablebias = OmittedVariableBiasGenerator("age", model)
-    test_model(omittedvariablebias)
-
-    causeeffectbias = CauseEffectBiasGenerator(
-        TabularCPD("rich", 2, [[0.8, 0.2],
-                               [0.2, 0.8]],
-                   evidence=["income"], evidence_card=[2]), model)
-    test_model(causeeffectbias)
+    #causeeffectbias = CauseEffectBiasGenerator(
+    #    TabularCPD("rich", 2, [[0.8, 0.2],
+    #                           [0.2, 0.8]],
+    #               evidence=["income"], evidence_card=[2]), model)
 
 # bayesian networks library https://pgmpy.org/
 # problem with categorical data
