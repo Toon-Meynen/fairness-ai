@@ -1,15 +1,10 @@
 from Data import Data
-import numpy as np
 import pgmpy.models
 import BayesianNetwork
-from pgmpy.inference import VariableElimination
 from pgmpy.factors.discrete import TabularCPD
 import scipy.stats
-from pgmpy.factors.continuous import LinearGaussianCPD
-from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.linear_model import LogisticRegression
 
 
 class DataGenerator:
@@ -31,153 +26,37 @@ class BiasGenerator:
         return data
 
 
-class SamplingBiasGenerator(BiasGenerator):
-    def __init__(self, parameter, parameter_value, weight=None, bias_strength=0.3):
-        super().__init__()
-
-        self.bias_strength = bias_strength  # Probability for items of selected group to be removed
-        self.parameter = parameter  # parameter to remove values for
-        self.pvalue = parameter_value  # value of parameter to remove values for
-        if weight is None:  # optional weight dictionary
-            weight = dict()  # example: {label1: {val1: weight, val2: weight}, label2 : {..}
-        self.weight = weight  # unfilled weights use value as their weight, if this value is 0, the lowest value above zero is halved and used instead
-
-    def apply(self, data):
-        # ensure that a fully functional weight dictionary is present. Fill where empty
-        total_weight = dict()
-        label_values = data.label_values()
-        for key in label_values:
-            total_weight[key] = 0
-            if key not in self.weight:
-                self.weight[key] = dict()
-            for value in label_values[key]:
-                # fill in missing values
-                if value not in self.weight[key]:
-                    tmp_value = value
-                    # avoid including zero-weight values as these wouldn't receive bias
-                    if value == 0:
-                        # use half of the lowest non-zero value for these instead
-                        tmp_value = min(x for x in label_values[key] if x != 0) / 2.0
-                    self.weight[key][value] = tmp_value
-                    total_weight[key] += tmp_value
-                else:
-                    total_weight[key] += self.weight[key][value]
-        print(self.weight)
-        # drop rows based on weight
-        for key in self.weight:
-            for value in self.weight[key]:
-                # fraction is multiplied by bias_strength to determine the probability for an item to be dropped
-                fraction = float(self.weight[key][value]) / float(total_weight[key])
-                # potential flaw: as these happen after one another the later values use already modified data
-                data.df().drop(
-                    data.df().loc[(data.df()[self.parameter] == self.pvalue) & (data.df()[key] == value)].sample(
-                        frac=self.bias_strength * fraction).index, inplace=True)
-        return data
-SelectionBiasGenerator = SamplingBiasGenerator
-
-
-class MeasurementBiasGenerator:
-    def __init__(self, parameter, parameter_value, measurement, weight=None, bias_strength=0.3):
-        # Here bias strength indicates the probability in the rows containing the correct biased parameter
-        # and value. That the parameter_to_adapt will be increased or decreased by one. Thus the lowest and highest
-        # class have only half the effect of this strength as these can only increase or decrease
-        self.parameter = parameter
-        self.pvalue = parameter_value
-
-        self.measurement = measurement
-        self.bias_strength = bias_strength
-        if weight is None:
-            weight = dict()
-        self.weight = weight
-
-    def apply(self, data):
-        # ensure weight dict is complete, fill with default values where empty
-        if "invalid_ratio" not in self.weight:
-            self.weight["invalid_ratio"] = 0.01
-        if "measurement_error" not in self.weight:
-            self.weight["measurement_error"] = scipy.stats.norm(0, 1)
-
-        values = data.df()[self.measurement].unique()
-
-        # select the measurements that encountered extra error
-        tmp = data.df().loc[(data.df()[self.parameter] == self.pvalue)].sample(frac=self.bias_strength)
-        # add measurement error
-        data.df().loc[tmp.index.values, self.measurement] += np.round(self.weight["measurement_error"].rvs(len(tmp)))
-        # if smaller, set to min value
-        data.df().loc[(data.df()[self.measurement] < min(values)), self.measurement] = min(values)
-        # if larger, set to max value
-        data.df().loc[(data.df()[self.measurement] > max(values)), self.measurement] = max(values)
-        # add invalid ratio to selected measurements
-        tmp = tmp.sample(frac=self.weight["invalid_ratio"])
-        data.df().loc[tmp.index.values, self.measurement] = np.random.randint(min(values), max(values) + 1, len(tmp))
-        return data
-
-
-class OmittedVariableBiasGenerator:
-    def __init__(self, parameter_to_omit, parameter_value=None):
-        self.parameter_to_omit = parameter_to_omit
-        self.pvalue = parameter_value
-
-    def apply(self, data):
-        # if no value is provided, remove entire column
-        if self.pvalue is None:
-            return data.remove_variable(self.parameter_to_omit)
-        # if value is provided, remove rows that contain said value
-        values = data.df()[self.parameter_to_omit].unique()
-        if len(values) == 0:
-            return data
-        # if it is the final value of this column, remove the column instead of all the rows
-        if len(values) == 1 and values[0] == self.pvalue:
-            return data.remove_variable(self.parameter_to_omit)
-        else:
-            data.df().drop(data.df().loc[(data.df()[self.parameter_to_omit] == self.pvalue)].index, inplace=True)
-            return data
-
-
-class CauseEffectBiasGenerator:
-    def __init__(self, cpd, data_generator):
-        self.name = cpd.variable
-        self.ins = cpd.get_evidence()
-        self.cpd = cpd
-        self.generator = data_generator
-
-    def simulate(self, n=10):
-        self.generator.add_node(self.name)
-        for i in self.ins:
-            self.generator.add_edge(i, self.name)
-        self.generator.add_cpds(self.cpd)
-        return self.generator.simulate(n)
-
-
 def sample_model():
     bn = BayesianNetwork.BayesianNetwork()
-    bn.addEdge("sex", "income")
+    bn.addEdge("gender", "income")
     bn.addEdge("age", "income")
     bn.addEdge("hard-working", "income")
-    bn.addProbability("sex", [0.5, 0.5], 2)
+    bn.addProbability("gender", [0.5, 0.5], 2)
     bn.addProbability("age", scipy.stats.randint(0, 5), 5)
     bn.addProbability("hard-working", [0.8, 0.2], 2)
-    bn.addProbability("income", {"sex": scipy.stats.uniform(),
+    bn.addProbability("income", {"gender": scipy.stats.uniform(),
                                  "age": scipy.stats.genhalflogistic(0.773),
                                  "hard-working": scipy.stats.genhalflogistic(0.773),
                                  "income": [0.6, 0.4]}, 2)
     bn._network.check_model()
     return bn
 
-def old_sample_model():
-    model = pgmpy.models.BayesianNetwork([('sex', 'income'), ('age', 'income')])
 
-    cpd_sex = TabularCPD('sex', 2, [[0.5], [0.5]])
+def old_sample_model():
+    model = pgmpy.models.BayesianNetwork([('gender', 'income'), ('age', 'income')])
+
+    cpd_sex = TabularCPD('gender', 2, [[0.5], [0.5]])
     cpd_age = TabularCPD('age', 5, [[0.2], [0.2], [0.2], [0.2], [0.2]])
     cpd_income = TabularCPD('income', 2, [[0.7, 0.65, 0.6, 0.55, 0.5, 0.7, 0.65, 0.6, 0.55, 0.5],
                                           [0.3, 0.35, 0.4, 0.45, 0.5, 0.3, 0.35, 0.4, 0.45, 0.5]],
-                            evidence=["sex", "age"], evidence_card=[2, 5])
+                            evidence=["gender", "age"], evidence_card=[2, 5])
     # cpd_h = TabularCPD('H', 2, [[0.2, 0.3, 0.4, 0.5], # h=0 with c=0, p=0;p=1; c=1, p=0;p=1
     #                            [0.8, 0.7, 0.6, 0.5]], # h=1 with c=0, p=0;p=1; c=1, p=0;p=1
     #                   evidence=['C', 'P'], evidence_card=[2, 2])
 
     model.add_cpds(cpd_sex, cpd_age, cpd_income)
     return model
+
 
 def police_model():
     model = BayesianNetwork.BayesianNetwork()
@@ -196,46 +75,43 @@ def police_model():
     model.addProbability("drugs", [0.9, 0.1], 2)
     model.addProbability("searched", [0.9, 0.1], 2)
     model.addProbability("drugs-detected", {"drugs": [0.1, 0.9],
-                                            "searched": [0.3, 0.7 ]} , 2)
+                                            "searched": [0.3, 0.7]}, 2)
 
     return model
 
 
-
-
 def test_data(data):
     if "age" not in data.df():
-        df2 = data.df().groupby(['sex'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
+        df2 = data.df().groupby(['gender'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
     elif "hard-working" not in data.df():
-        df2 = data.df().groupby(['sex', 'age'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
-        sns.barplot(x="age", hue="sex", y="mean", data=df2)
+        df2 = data.df().groupby(['gender', 'age'], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
+        sns.barplot(x="age", hue="gender", y="mean", data=df2)
     else:
-        df2 = data.df().groupby(['sex', 'age', "hard-working"], as_index=False)['income'].agg({"mean": "mean", "count": "count"})
-        sns.catplot(x="age", y="mean", hue="sex", col="hard-working", data=df2, kind="bar")
+        df2 = data.df().groupby(['gender', 'age', "hard-working"], as_index=False)['income'].agg(
+            {"mean": "mean", "count": "count"})
+        sns.catplot(x="age", y="mean", hue="gender", col="hard-working", data=df2, kind="bar")
     plt.show()
 
+    if "hyped_param" in data.df():
+        plt.plot(range(len(data.df())), data.df()["hyped_param"])
+        plt.show()
+
+def test_data2(data):
+    df2 = data.df().groupby(['group', 'gender'], as_index=False)['income'].agg(
+        {"mean": "mean", "count": "count"})
+    print(df2)
+    df3 = data.df().groupby(['gender'], as_index=False)['income'].agg(
+        {"mean": "mean", "count": "count"})
+    print(df3)
+
+
 def test_police_data(data):
-    df2 = data.df().groupby(['gender', 'race', "searched", "drugs"], as_index=False)['drugs-detected'].agg({"mean": "mean", "count": "count"})
+    df2 = data.df().groupby(['gender', 'race', "searched", "drugs"], as_index=False)['drugs-detected'].agg(
+        {"mean": "mean", "count": "count"})
     sns.catplot(x="drugs", y="count", hue="race", col="searched", data=df2, kind="bar")
     sns.catplot(x="drugs", y="mean", hue="race", col="searched", data=df2, kind="bar")
     plt.show()
 
-
-if __name__ == "__main__":
-    model = police_model()
-    generator = DataGenerator(model, ["gender", "race"], ["drugs-detected"])
-    data = generator.simulate(n=100_000)
-    test_police_data(data)
-    bias = SelectionBiasGenerator("race", 0, {"drugs-detected": {0: 0.2, 1: 1}}, bias_strength=0.4)
-    data = bias.apply(data)
-    test_police_data(data)
-
-    #model = sample_model()
-
-    #causeeffectbias = CauseEffectBiasGenerator(
-    #    TabularCPD("rich", 2, [[0.8, 0.2],
-    #                           [0.2, 0.8]],
-    #               evidence=["income"], evidence_card=[2]), model)
 
 # bayesian networks library https://pgmpy.org/
 # problem with categorical data
@@ -247,3 +123,4 @@ if __name__ == "__main__":
 
 
 # mid february halfway meeting
+
