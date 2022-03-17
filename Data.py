@@ -75,15 +75,19 @@ class Data:
         return True
 
 
-#     def shuffle(self, seed=None):
-#         """
-#         Shuffles the data
-#
-#         :seed: seed to shuffle with, if None, a random seed is used
-#         :return: /
-#         """
-#         self.x, self.y, self.g = shuffle(self.x, self.y, self.g, random_state=seed)
-#
+    def shuffle(self, seed=None):
+        """
+           Shuffles the data
+
+           :seed: seed to shuffle with, if None, a random seed is used
+           :return: /
+           """
+        from sklearn.utils import shuffle
+        self._df = shuffle(self.df(), random_state=seed)
+
+    def head(self):
+        return self.df().head()
+
 #     def train_test_split(self):
 #         pass
 #
