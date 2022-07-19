@@ -10,7 +10,6 @@ class CauseEffectBiasGenerator(BiasGenerator):
         self.P = probability
         self.C = consecutive
 
-
     def apply(self, data):
         if self.C:
             # https://stackoverflow.com/questions/59862619/how-can-i-select-a-sequence-of-random-rows-from-a-pandas-dataframe
@@ -27,6 +26,4 @@ class CauseEffectBiasGenerator(BiasGenerator):
         model.fit(data.df())
         print(model.simulate(10))
 
-
         return data
-

@@ -32,7 +32,7 @@ class SamplingBiasGenerator(BiasGenerator):
                     total_weight[key] += tmp_value
                 else:
                     total_weight[key] += self.weight[key][value]
-        print(self.weight)
+        #print(self.weight)
         # drop rows based on weight
         for key in self.weight:
             for value in self.weight[key]:

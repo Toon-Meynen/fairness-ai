@@ -7,7 +7,7 @@ class MeasurementBiasGenerator(BiasGenerator):
     def __init__(self, parameter, parameter_value, measurement, weight=None, bias_strength=0.3):
         super().__init__()
         # Here bias strength indicates the probability in the rows containing the correct biased parameter
-        # and value. That the parameter_to_adapt will be increased or decreased by one. Thus the lowest and highest
+        # and value. That the measurement will be increased or decreased by one. Thus the lowest and highest
         # class have only half the effect of this strength as these can only increase or decrease
         self.parameter = parameter
         self.pvalue = parameter_value
@@ -17,6 +17,13 @@ class MeasurementBiasGenerator(BiasGenerator):
         if weight is None:
             weight = dict()
         self.weight = weight
+
+        # if weight["measurement_error"] is a list, convert to scipy stats object
+        self._discrete = False
+        if "measurement_error" in self.weight:
+            if type(self.weight["measurement_error"]) is list:
+                self._discrete = True
+                self.weight["measurement_error"] = scipy.stats.rv_discrete(values=(range(len(self.weight["measurement_error"])), self.weight["measurement_error"]))
 
     def apply(self, data):
         # ensure weight dict is complete, fill with default values where empty
@@ -30,7 +37,10 @@ class MeasurementBiasGenerator(BiasGenerator):
         # select the measurements that encountered extra error
         tmp = data.df().loc[(data.df()[self.parameter] == self.pvalue)].sample(frac=self.bias_strength)
         # add measurement error
-        data.df().loc[tmp.index.values, self.measurement] += np.round(self.weight["measurement_error"].rvs(len(tmp)))
+        if self._discrete:
+            data.df().loc[tmp.index.values, self.measurement] = self.weight["measurement_error"].rvs(size=len(tmp))
+        else:
+            data.df().loc[tmp.index.values, self.measurement] += np.round(self.weight["measurement_error"].rvs(size=len(tmp))).astype(int)
         # if smaller, set to min value
         data.df().loc[(data.df()[self.measurement] < min(values)), self.measurement] = min(values)
         # if larger, set to max value

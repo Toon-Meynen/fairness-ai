@@ -23,16 +23,29 @@ class Data:
         return self._df.drop(self._y, axis=1)
 
     def y(self):
-        return self._df.loc[:, self._y]
+        return self._df.loc[:, self._y].values.ravel()
 
     def df(self):
         return self._df
 
+    def copy(self):
+        import copy
+        return copy.deepcopy(self)
+
+    def __len__(self):
+        return len(self.df())
+
     # aif
-    def metrics(self):
-        return aif360.metrics.BinaryLabelDatasetMetric(self.aif(),
+    def metrics(self, other=None):
+        if other:
+            return aif360.metrics.ClassificationMetric(self.aif(), other.aif(),
                                                        privileged_groups=[self._privileged_groups],
                                                        unprivileged_groups=[self._unprivileged_groups])
+        else:
+            return aif360.metrics.BinaryLabelDatasetMetric(self.aif(),
+                                                       privileged_groups=[self._privileged_groups],
+                                                       unprivileged_groups=[self._unprivileged_groups])
+
 
     def aif(self):
         if self._isBinary:
@@ -43,6 +56,12 @@ class Data:
             return rval
         else:
             raise NotImplemented("support for non binary label dataset")
+
+    def privilegedGroups(self):
+        return self._privileged_groups
+
+    def unprivilegedGroups(self):
+        return self._unprivileged_groups
 
     # misc
     def labels(self):
@@ -73,7 +92,6 @@ class Data:
             if len(self._df[y].unique()) > 2:
                 return False
         return True
-
 
     def shuffle(self, seed=None):
         """

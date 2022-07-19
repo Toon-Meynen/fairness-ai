@@ -1,8 +1,8 @@
 import pgmpy.models
-import scipy.stats
 import pgmpy.factors.discrete
 import numpy as np
 import scipy.special
+
 import DataGenerator
 
 
@@ -41,7 +41,6 @@ class BayesianNetwork:
 
             cpd_matrix = []
             for value in range(size-1):
-                print(value)
                 # calculate probabilities for each value of outcome
                 matrices = []
                 for parent in parents:
@@ -75,16 +74,15 @@ class BayesianNetwork:
             cpd_matrix = list(1 - tmp)
             cpd_matrix.extend(tmp)
             cpd_matrix = np.asarray(cpd_matrix)
-            print(cpd_matrix)
-            print()
 
             # ensure each column sums to 1
             # using softmax
             #cpd_matrix = scipy.special.softmax(cpd_matrix, axis=0)
             # using normalization
             #cpd_matrix /= np.asarray([cpd_matrix.T[i].sum() for i in range(len(cpd_matrix.T))])
-            print(cpd_matrix)
 
+            print(a)
+            print(cpd_matrix)
             cpd = pgmpy.factors.discrete.TabularCPD(a, size, cpd_matrix, evidence=parents,
                                                     evidence_card=[len(self._network.get_cpds(parent).values) for parent
                                                                    in parents])

@@ -3,7 +3,7 @@ import Bias
 if __name__ == "__main__":
     model = Bias.sample_model()
     generator = Bias.DataGenerator(data_generator=model, protected_attributes=["gender"], labels=["income"])
-    data = generator.simulate(100_000)
+    data = generator.simulate(10_000)
     print(len(data.df()))
     Bias.test_data(data)
     print(data.metrics().disparate_impact())

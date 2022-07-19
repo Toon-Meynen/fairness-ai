@@ -7,7 +7,7 @@ import numpy as np
 
 
 class SimpsonsParadoxGenerator:
-    def __init__(self, base_model, groups, protected_attributes, labels, group_label="group"):
+    def __init__(self, base_model, groups, protected_attributes, labels, group_label="group", force_paradox=False): # fiddle with weights
         super().__init__()
         self._prot = protected_attributes
         self._lab = labels
