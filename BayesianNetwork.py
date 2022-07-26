@@ -81,13 +81,15 @@ class BayesianNetwork:
             # using normalization
             #cpd_matrix /= np.asarray([cpd_matrix.T[i].sum() for i in range(len(cpd_matrix.T))])
 
-            print(a)
-            print(cpd_matrix)
+            #print(a)
+            #print(cpd_matrix)
             cpd = pgmpy.factors.discrete.TabularCPD(a, size, cpd_matrix, evidence=parents,
                                                     evidence_card=[len(self._network.get_cpds(parent).values) for parent
                                                                    in parents])
             self._network.add_cpds(cpd)
 
+    def check_model(self):
+        return self._network.check_model()
 
 if __name__ == "__main__":
     bn = BayesianNetwork()

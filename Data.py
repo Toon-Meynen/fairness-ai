@@ -1,11 +1,14 @@
 import aif360.metrics
 import numpy as np
 import aif360.datasets
+from sklearn.model_selection import train_test_split
 import tqdm
 
 
 class Data:
     def __init__(self, df, protected_attributes, labels):
+        self._seed = 0
+
         self._df = df
         self._y = labels
         self._p = protected_attributes
@@ -106,8 +109,14 @@ class Data:
     def head(self):
         return self.df().head()
 
-#     def train_test_split(self):
-#         pass
+    def split(self, size):
+        train, test = train_test_split(self._df, test_size=size, random_state=self._seed)
+        return Data(train, protected_attributes=self._p, labels=self._y), Data(test, protected_attributes=self._p, labels=self._y),
+
+    def train_test_split(self, size):
+        X_train, X_test, Y_train, Y_test = train_test_split(self.X(), self.y(), test_size=size, random_state=self._seed)
+        return X_train, X_test, Y_train, Y_test
+
 #
 #     def display(self):
 #         pass
