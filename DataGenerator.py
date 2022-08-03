@@ -19,8 +19,8 @@ class DataGenerator:
 
 
 class BiasGenerator:
-    def __init__(self):
-        pass
+    def __init__(self, seed=None):
+        self.seed = seed
 
     def apply(self, data):
         return data
