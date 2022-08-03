@@ -3,10 +3,10 @@ import numpy as np
 import aif360.datasets
 from sklearn.model_selection import train_test_split
 import tqdm
-
+import copy
 
 class Data:
-    def __init__(self, df, protected_attributes, labels):
+    def __init__(self, df, protected_attributes, labels, weights=None):
         self._seed = 0
 
         self._df = df
@@ -21,18 +21,23 @@ class Data:
 
         self._isBinary = self._setBinary()
 
+        if weights is None:
+            weights = [1] * len(self._df)
+        self._df["__weight__"] = np.asarray(weights)
+
     # Basic
     def X(self):
-        return self._df.drop(self._y, axis=1)
+        return self.df(weight=False).drop(self._y, axis=1)
 
     def y(self):
-        return self._df.loc[:, self._y].values.ravel()
+        return self.df(weight=False).loc[:, self._y].values.ravel()
 
-    def df(self):
-        return self._df
+    def df(self, weight=True):
+        if weight:
+            return self._df
+        return self._df.drop('__weight__', axis=1)
 
     def copy(self):
-        import copy
         return copy.deepcopy(self)
 
     def __len__(self):
@@ -49,12 +54,12 @@ class Data:
                                                        privileged_groups=[self._privileged_groups],
                                                        unprivileged_groups=[self._unprivileged_groups])
 
-
     def aif(self):
         if self._isBinary:
             rval = aif360.datasets.BinaryLabelDataset(df=self._df,
                                                       label_names=self._y,
-                                                      protected_attribute_names=self._p)
+                                                      protected_attribute_names=self._p,
+                                                      instance_weights_name="__weight__")
             rval.validate_dataset()
             return rval
         else:
@@ -88,6 +93,10 @@ class Data:
             self._unprivileged_groups.pop(variable)
         self._isBinary = self._setBinary()
         return self
+
+    # data frame altering functions
+    def drop(self, indices, inplace=False):
+        return self._df.drop(indices, inplace=inplace)
 
     # internal functions
     def _setBinary(self):
