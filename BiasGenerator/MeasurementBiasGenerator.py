@@ -4,6 +4,30 @@ import numpy as np
 
 
 class MeasurementBiasGenerator(BiasGenerator):
+    """
+    introduces a measurement bias on a given parameter, value pair.
+
+    Attributes
+    ----------
+    parameter : str
+        bias is introduced w.r.t. this parameter, value pair
+    pvalue : int
+        bias is introduced w.r.t. this parameter, value pair
+    measurement: str
+        the parameter we want to add a measurement error to
+    bias_strength: float
+        propability for a condidate datapoint to be altered
+    weight: dict
+        weight["measurement_error"]
+            a statistical distribution that is added to the datapoint we alter, giving a new datapoint.
+        weight["invalid_ratio"]
+            a probability that a selected datapoint is set to a completely random value within its original domain
+
+    Methods
+    -------
+    apply(data)
+        Applies the bias on a given dataset, returns the biased set.
+    """
     def __init__(self, parameter, parameter_value, measurement, weight=None, bias_strength=0.3):
         super().__init__()
         # Here bias strength indicates the probability in the rows containing the correct biased parameter

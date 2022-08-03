@@ -2,6 +2,22 @@ from DataGenerator import BiasGenerator
 
 
 class OmittedVariableBiasGenerator(BiasGenerator):
+    """
+    The omitted variable bias generator removes a column from the dataset or, removes all rows that
+    contain a specific value.
+
+    Attributes
+    ----------
+    parameter_to_omit : str
+        The parameter that we want to remove
+    pvalue : int (optional)
+        When provided, removes all occurrences of this value instead of the entire column of data
+
+    Methods
+    -------
+    apply(data)
+        Applies the bias on a given dataset, returns the biased set.
+    """
     def __init__(self, parameter_to_omit, parameter_value=None):
         super().__init__()
         self.parameter_to_omit = parameter_to_omit

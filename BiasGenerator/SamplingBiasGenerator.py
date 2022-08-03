@@ -2,8 +2,32 @@ from DataGenerator import BiasGenerator
 
 
 class SamplingBiasGenerator(BiasGenerator):
-    def __init__(self, parameter, parameter_value, weight=None, bias_strength=0.3):
-        super().__init__()
+    """
+    The sampling bias generator will remove rows based on four parameters. First it will only select
+    rows for which parameter == pvalue, of these rows bias_strength determines how many rows are dropped.
+    This dropping is weighted by the weight dictionary. Thus for each row where parameter == pvalue there
+    is a probability of (weight / total weight) * bias_strength for this row to be dropped.
+
+    Attributes
+    ----------
+    bias_strength : float
+        indicates the probability for a candidate item to be selected
+    parameter : str
+        we introduce bias with respect to this parameter
+    pvalue : int
+        we introduce bais with respect to this value of parameter
+    weight : dict
+        this dictionary contains a weight for each potential value of the labels in the dataset
+        if weights are not provided these are generated based on the value. This weight will indicate
+        how likely it is for a row with a certain value to be removed.
+
+    Methods
+    -------
+    apply(data)
+        Applies the bias on a given dataset, returns the biased set.
+    """
+    def __init__(self, parameter, parameter_value, weight=None, bias_strength=0.3, seed=None):
+        super().__init__(seed)
 
         self.bias_strength = bias_strength  # Probability for items of selected group to be removed
         self.parameter = parameter  # parameter to remove values for
@@ -41,6 +65,6 @@ class SamplingBiasGenerator(BiasGenerator):
                 # potential flaw: as these happen after one another the later values use already modified data
                 data.df().drop(
                     data.df().loc[(data.df()[self.parameter] == self.pvalue) & (data.df()[key] == value)].sample(
-                        frac=self.bias_strength * fraction).index, inplace=True)
+                        frac=self.bias_strength * fraction, random_state=self.seed).index, inplace=True)
         return data
 SelectionBiasGenerator = SamplingBiasGenerator
