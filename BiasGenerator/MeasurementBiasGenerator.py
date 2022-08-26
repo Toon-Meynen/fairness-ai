@@ -28,8 +28,8 @@ class MeasurementBiasGenerator(BiasGenerator):
     apply(data)
         Applies the bias on a given dataset, returns the biased set.
     """
-    def __init__(self, parameter, parameter_value, measurement, weight=None, bias_strength=0.3):
-        super().__init__()
+    def __init__(self, parameter, parameter_value, measurement, weight=None, bias_strength=0.3, seed=None):
+        super().__init__(seed)
         # Here bias strength indicates the probability in the rows containing the correct biased parameter
         # and value. That the measurement will be increased or decreased by one. Thus the lowest and highest
         # class have only half the effect of this strength as these can only increase or decrease
@@ -50,26 +50,30 @@ class MeasurementBiasGenerator(BiasGenerator):
                 self.weight["measurement_error"] = scipy.stats.rv_discrete(values=(range(len(self.weight["measurement_error"])), self.weight["measurement_error"]))
 
     def apply(self, data):
+        data = data.copy() # ensure original object isn't changed
+
+        np.random.seed(self.seed)
+
         # ensure weight dict is complete, fill with default values where empty
         if "invalid_ratio" not in self.weight:
             self.weight["invalid_ratio"] = 0.01
         if "measurement_error" not in self.weight:
             self.weight["measurement_error"] = scipy.stats.norm(0, 1)
 
-        values = data.df()[self.measurement].unique()
+        values = data.df(weight=True)[self.measurement].unique()
 
         # select the measurements that encountered extra error
-        tmp = data.df().loc[(data.df()[self.parameter] == self.pvalue)].sample(frac=self.bias_strength)
+        tmp = data.df(weight=True).loc[(data.df(weight=True)[self.parameter] == self.pvalue)].sample(frac=self.bias_strength, random_state=self.seed)
         # add measurement error
         if self._discrete:
-            data.df().loc[tmp.index.values, self.measurement] = self.weight["measurement_error"].rvs(size=len(tmp))
+            data.df(weight=True).loc[tmp.index.values, self.measurement] = self.weight["measurement_error"].rvs(size=len(tmp), random_state=self.seed)
         else:
-            data.df().loc[tmp.index.values, self.measurement] += np.round(self.weight["measurement_error"].rvs(size=len(tmp))).astype(int)
+            data.df(weight=True).loc[tmp.index.values, self.measurement] += np.round(self.weight["measurement_error"].rvs(size=len(tmp), random_state=self.seed)).astype(int)
         # if smaller, set to min value
-        data.df().loc[(data.df()[self.measurement] < min(values)), self.measurement] = min(values)
+        data.df(weight=True).loc[(data.df(weight=True)[self.measurement] < min(values)), self.measurement] = min(values)
         # if larger, set to max value
-        data.df().loc[(data.df()[self.measurement] > max(values)), self.measurement] = max(values)
+        data.df(weight=True).loc[(data.df(weight=True)[self.measurement] > max(values)), self.measurement] = max(values)
         # add invalid ratio to selected measurements
-        tmp = tmp.sample(frac=self.weight["invalid_ratio"])
-        data.df().loc[tmp.index.values, self.measurement] = np.random.randint(min(values), max(values) + 1, len(tmp))
+        tmp = tmp.sample(frac=self.weight["invalid_ratio"], random_state=self.seed)
+        data.df(weight=True).loc[tmp.index.values, self.measurement] = np.random.randint(min(values), max(values) + 1, len(tmp))
         return data

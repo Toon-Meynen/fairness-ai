@@ -14,8 +14,8 @@ class DataGenerator:
         self._labels = labels
 
     # generates n items
-    def simulate(self, n=10):
-        return Data(df=self.data_generator.simulate(n), protected_attributes=self._prot_attr, labels=self._labels)
+    def simulate(self, n=10, seed=None):
+        return Data(df=self.data_generator.simulate(n, seed=seed), protected_attributes=self._prot_attr, labels=self._labels)
 
 
 class BiasGenerator:

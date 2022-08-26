@@ -1,3 +1,5 @@
+import numpy as np
+
 from DataGenerator import BiasGenerator
 
 
@@ -32,39 +34,52 @@ class SamplingBiasGenerator(BiasGenerator):
         self.bias_strength = bias_strength  # Probability for items of selected group to be removed
         self.parameter = parameter  # parameter to remove values for
         self.pvalue = parameter_value  # value of parameter to remove values for
-        if weight is None:  # optional weight dictionary # TODO: Allow non-label values
+        if weight is None:  # optional weight dictionary
             weight = dict()  # example: {label1: {val1: weight, val2: weight}, label2 : {..}
         self.weight = weight  # unfilled weights use value as their weight, if this value is 0, the lowest value above zero is halved and used instead
 
     def apply(self, data):
+        # ensure we don't change the object
+        data = data.copy()
+
         # ensure that a fully functional weight dictionary is present. Fill where empty
+        max_w = np.NINF
         total_weight = dict()
-        label_values = data.label_values()
-        for key in label_values:
-            total_weight[key] = 0
-            if key not in self.weight:
-                self.weight[key] = dict()
-            for value in label_values[key]:
-                # fill in missing values
-                if value not in self.weight[key]:
-                    tmp_value = value
-                    # avoid including zero-weight values as these wouldn't receive bias
-                    if value == 0:
-                        # use half of the lowest non-zero value for these instead
-                        tmp_value = min(x for x in label_values[key] if x != 0) / 2.0
-                    self.weight[key][value] = tmp_value
-                    total_weight[key] += tmp_value
-                else:
+        if len(self.weight) == 0:
+            label_values = data.label_values()
+            for key in label_values:
+                total_weight[key] = 0
+                if key not in self.weight:
+                    self.weight[key] = dict()
+                for value in label_values[key]:
+                    if value not in self.weight[key]:
+                        self.weight[key][value] = 1
                     total_weight[key] += self.weight[key][value]
-        #print(self.weight)
+        elif len(self.weight) == 1:
+            for key in self.weight:
+                if key not in total_weight:
+                    total_weight[key] = 0
+                    for value in self.weight[key]:
+                        total_weight[key] += self.weight[key][value]
+                        if self.weight[key][value] > max_w:
+                            max_w = self.weight[key][value]
+        else:
+            raise NotImplementedError("Can only introduce sample bias with respect to one attribute at a time")
+
+        #print(self.weight, total_weight)
         # drop rows based on weight
         for key in self.weight:
             for value in self.weight[key]:
                 # fraction is multiplied by bias_strength to determine the probability for an item to be dropped
-                fraction = float(self.weight[key][value]) / float(total_weight[key])
+                # normalize by dividing by maximum
+                #fraction = float(self.weight[key][value]) / float(total_weight[key])
+                fraction = float(self.weight[key][value]) / max_w
                 # potential flaw: as these happen after one another the later values use already modified data
-                data.df().drop(
-                    data.df().loc[(data.df()[self.parameter] == self.pvalue) & (data.df()[key] == value)].sample(
-                        frac=self.bias_strength * fraction, random_state=self.seed).index, inplace=True)
+
+                f = self.bias_strength * fraction
+                #print(f)
+                data.df(weight=True).drop(
+                    data.df(weight=True).loc[(data.df(weight=True)[self.parameter] == self.pvalue) & (data.df(weight=True)[key] == value)].sample(
+                        frac=f, random_state=self.seed).index, inplace=True)
         return data
 SelectionBiasGenerator = SamplingBiasGenerator

@@ -10,14 +10,21 @@ class BayesianNetwork:
     def __init__(self):
         self._network = pgmpy.models.BayesianNetwork()
 
-    def simulate(self, n=10_000):
-        return self._network.simulate(n)
+    def simulate(self, n=10_000, seed=None):
+        return self._network.simulate(n, seed=seed)
 
     def addEdge(self, a, b):
         self._network.add_edge(a, b)
 
     def addNode(self, a):
         self._network.add_node(a)
+
+    def addCpd(self, a, parents, cpd):
+        cpd_matrix = np.asarray(cpd)
+        cpd = pgmpy.factors.discrete.TabularCPD(a, len(cpd), cpd_matrix, evidence=parents,
+                                                evidence_card=[len(self._network.get_cpds(parent).values) for parent
+                                                               in parents])
+        self._network.add_cpds(cpd)
 
     def addProbability(self, a, p, size):
         if a in self._network.get_roots():
@@ -64,8 +71,8 @@ class BayesianNetwork:
                         matrix = matrix.reshape((len(matrix), 1))
 
                 # add weight of the specific outcome value
-                if a in p:
-                    matrix = matrix * p[a][(value+1*-1)]  # !! invert value
+                #if a in p:
+                #    matrix = matrix * p[a][(value+1*-1)]  # !! invert value
 
                 cpd_matrix.extend(matrix.T)
 
@@ -82,7 +89,7 @@ class BayesianNetwork:
             #cpd_matrix /= np.asarray([cpd_matrix.T[i].sum() for i in range(len(cpd_matrix.T))])
 
             #print(a)
-            #print(cpd_matrix)
+            print(cpd_matrix)
             cpd = pgmpy.factors.discrete.TabularCPD(a, size, cpd_matrix, evidence=parents,
                                                     evidence_card=[len(self._network.get_cpds(parent).values) for parent
                                                                    in parents])
